@@ -1,6 +1,12 @@
 const os = require("os")
 const child_process = require("child_process")
 
+function execFileSyncWithCfDialTimeout(file, args = [], options = {}) {
+  options["env"] = options["env"] || process.env
+  options["env"]["CF_DIAL_TIMEOUT"] = "30"
+  return child_process.execFileSync(file, args, options)
+}
+
 exports.auth = source => {
   if (process.env.NODE_ENV !== "production") {
     console.log("CF: Non-production: assume we are already logged in")
@@ -15,14 +21,14 @@ exports.auth = source => {
   const secret = useClientCredentials ? source.client_secret : source.password
 
   try {
-    child_process.execFileSync("cf", ["api", source.api])
+    execFileSyncWithCfDialTimeout("cf", ["api", source.api])
     console.log(`CF: API endpoint set to ${source.api}`)
   } catch (e) {
     throw new Error(`CF: Unable to set API endpoint to ${source.api}`)
   }
 
   try {
-    child_process.execFileSync(
+    execFileSyncWithCfDialTimeout(
       "cf",
       [
         "auth",
@@ -49,7 +55,7 @@ exports.target = ({ organization, space }) => {
     return
   }
   try {
-    child_process.execFileSync("cf", [
+    execFileSyncWithCfDialTimeout("cf", [
       "target",
       "-o",
       organization,
@@ -66,14 +72,14 @@ exports.appInfo = ({ name, guid }) => {
   try {
     guid =
       guid ||
-      child_process
-        .execFileSync("cf", ["app", "--guid", name])
+      execFileSyncWithCfDialTimeout("cf", ["app", "--guid", name])
         .toString()
         .trim()
 
-    const appInfo = child_process
-      .execFileSync("cf", ["curl", `/v2/apps/${guid}`])
-      .toString()
+    const appInfo = execFileSyncWithCfDialTimeout("cf", [
+      "curl",
+      `/v2/apps/${guid}`
+    ]).toString()
 
     return JSON.parse(appInfo)
   } catch (e) {
@@ -83,7 +89,7 @@ exports.appInfo = ({ name, guid }) => {
 
 exports.appExists = ({ name }) => {
   try {
-    child_process.execFileSync("cf", ["app", "--guid", name])
+    execFileSyncWithCfDialTimeout("cf", ["app", "--guid", name])
     return true
   } catch (e) {
     return false
@@ -91,13 +97,13 @@ exports.appExists = ({ name }) => {
 }
 
 exports.delete = ({ name }) => {
-  child_process.execFileSync("cf", ["delete", name, "-f"])
+  execFileSyncWithCfDialTimeout("cf", ["delete", name, "-f"])
   console.log(`CF: Deleted ${name}`)
 }
 
 exports.rename = ({ from, to, failOnError = true }) => {
   try {
-    child_process.execFileSync("cf", ["rename", from, to])
+    execFileSyncWithCfDialTimeout("cf", ["rename", from, to])
     console.log(`CF: Renamed ${from} to ${to}`)
   } catch (e) {
     if (failOnError) {
@@ -114,7 +120,7 @@ exports.push = ({ name, path, manifest, docker_password, noStart = false }) => {
   }
 
   try {
-    child_process.execFileSync(
+    execFileSyncWithCfDialTimeout(
       "cf",
       [
         "push",
@@ -136,7 +142,7 @@ exports.push = ({ name, path, manifest, docker_password, noStart = false }) => {
 exports.start = ({ name }) => {
   console.log(`CF: Starting ${name}...`)
   try {
-    child_process.execFileSync("cf", ["start", name], {
+    execFileSyncWithCfDialTimeout("cf", ["start", name], {
       stdio: [null, process.stderr, process.stderr]
     })
     console.log(`CF: Application ${name} successfully started!`)
@@ -155,7 +161,7 @@ exports.bindServices = ({ name, services = [] }) => {
     }
 
     const config = JSON.stringify(service.config)
-    child_process.execFileSync(
+    execFileSyncWithCfDialTimeout(
       "cf",
       ["bind-service", name, service.name, "-c", config],
       { stdio: [null, process.stderr, process.stderr] }
@@ -165,9 +171,11 @@ exports.bindServices = ({ name, services = [] }) => {
 
 exports.log = ({ name }) => {
   try {
-    const logs = child_process
-      .execFileSync("cf", ["logs", "--recent", name])
-      .toString()
+    const logs = execFileSyncWithCfDialTimeout("cf", [
+      "logs",
+      "--recent",
+      name
+    ]).toString()
     return logs
   } catch (e) {
     throw new Error(`CF: Unable to obtain "${name}" logs`)
@@ -176,7 +184,7 @@ exports.log = ({ name }) => {
 
 exports.stop = ({ name }) => {
   try {
-    child_process.execFileSync("cf", ["stop", name])
+    execFileSyncWithCfDialTimeout("cf", ["stop", name])
     console.log(`CF: Application "${name} stopped.`)
   } catch (e) {
     console.warn(`CF: WARNING Unable to stop application "${name}"`)
